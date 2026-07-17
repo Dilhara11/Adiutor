@@ -1,82 +1,80 @@
 # Adiutor
 
-Adiutor is a two-part AI-assisted HR workspace:
+Adiutor is an AI-powered HR workspace with a modern web client and a FastAPI backend.
 
-- A Next.js frontend in [client](client) for chatting with the assistant and viewing responses.
-- A FastAPI backend in [server](server) for employee data actions and Gemini-powered chat orchestration.
+- **Frontend:** Next.js app in [`client`](client) for chatting with the assistant and viewing responses.
+- **Backend:** FastAPI service in [`server`](server) for employee operations and Gemini-backed chat orchestration.
 
-The frontend talks to the backend over HTTP. By default, the client expects the API at `http://localhost:5000`.
+By default, the frontend calls the backend at `http://localhost:5000`.
 
-## Tech Stack
+## ✨ Highlights
 
-- Frontend: Next.js, React, TypeScript, Tailwind CSS
-- Backend: FastAPI, Uvicorn, Python, SQLite
-- AI: Google Gemini via the `google-genai` SDK
+- AI assistant chat powered by Google Gemini
+- Employee management endpoints for common HR flows
+- TypeScript-based frontend with modern React + Next.js
+- Python FastAPI backend with SQLite persistence
 
-## Project Structure
+## 🧱 Architecture
 
-- [client](client): Next.js app and UI components
-- [server](server): FastAPI API, employee logic, and Gemini integration
+```text
+client (Next.js)  --->  server (FastAPI)  --->  Gemini API
+                       └---> SQLite
+```
 
-## Prerequisites
+## 🛠️ Tech Stack
 
-- Node.js 18+ for the client
-- Python 3.11+ for the server
-- A Gemini API key for the chat endpoint
+- **Frontend:** Next.js, React, TypeScript, Tailwind CSS
+- **Backend:** FastAPI, Uvicorn, Python, SQLite
+- **AI:** Google Gemini (`google-genai`)
 
-## Setup
+## 📁 Project Structure
 
-### 1. Backend
+- [`client`](client) — UI, routing, and chat experience
+- [`server`](server) — API, business logic, and AI/tool integration
+
+## ✅ Prerequisites
+
+- Node.js 18+
+- Python 3.11+
+- Gemini API key
+
+## 🚀 Quick Start
+
+### 1) Start the backend
 
 ```bash
 cd server
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirments.txt
+python main.py
 ```
 
-Create a `.env` file in [server](server) with your Gemini key:
+Create `server/.env`:
 
 ```env
 GEMINI_API_KEY=your_key_here
 ```
 
-Start the API server:
+Backend URL: `http://localhost:5000`
 
-```bash
-python main.py
-```
-
-The backend runs on `http://localhost:5000`.
-
-### 2. Frontend
+### 2) Start the frontend
 
 ```bash
 cd client
 npm install
+npm run dev
 ```
 
-If you want to point the frontend at a different backend URL, create a `.env.local` file in [client](client):
+Optional `client/.env.local`:
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
 ```
 
-Start the app:
+Frontend URL: `http://localhost:3000`
 
-```bash
-npm run dev
-```
-
-The frontend runs on `http://localhost:3000`.
-
-## How It Works
-
-- The client sends prompts to `POST /chat`.
-- The server forwards the prompt to Gemini with tool support.
-- The server also exposes employee CRUD-style endpoints for department/job lookups and record management.
-
-## API Endpoints
+## 🔌 API at a glance
 
 - `GET /employees/department/{department_id}`
 - `GET /employees/job/{job_id}`
@@ -85,14 +83,15 @@ The frontend runs on `http://localhost:3000`.
 - `DELETE /employees/{employee_id}`
 - `POST /chat`
 
-## Notes
+## 🧪 Frontend Scripts
 
-- Local SQLite data files and Python virtual environments are ignored by git.
-- The backend enables CORS for `http://localhost:3000` by default.
-- The repository contains a legacy file named `requirments.txt`; keep that filename as-is unless you plan to rename it everywhere it is referenced.
+From `client/`:
 
-## Development Tips
+- `npm run dev` — start development server
+- `npm run lint` — run ESLint
+- `npm run build` — create production build
 
-- Run the backend first, then start the frontend.
-- If chat requests fail, confirm `GEMINI_API_KEY` is set and the backend is reachable on port `5000`.
-- If the frontend cannot reach the API, verify `NEXT_PUBLIC_API_BASE_URL` matches your backend URL.
+## 📝 Notes
+
+- Backend CORS is configured for `http://localhost:3000` by default.
+- The backend dependency file is intentionally named `requirments.txt`.
