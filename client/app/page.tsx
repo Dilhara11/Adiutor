@@ -1,191 +1,214 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Hero from "./components/landing/Hero";
-import OutputArea from "./components/landing/OutputArea";
-import PageShell from "./components/landing/PageShell";
-import PromptInput from "./components/landing/PromptInput";
-import TopBar from "./components/landing/TopBar";
-import { sendChatPrompt } from "./lib/chatApi";
+import { useCallback, useEffect, useRef, useState } from "react";
+import ChatMessage, { type Message } from "./components/ChatMessage";
+import Composer, { type ComposerHandle } from "./components/Composer";
+import Sidebar from "./components/Sidebar";
+import Welcome, { type QuickAction } from "./components/Welcome";
+import { MenuIcon, PlusIcon } from "./components/icons";
+import { getSummary, streamChat, type ChatTurn, type WorkforceSummary } from "./lib/api";
 
-const formatTwoDigits = (value: number) => value.toString().padStart(2, "0");
+let idCounter = 0;
+const nextId = () => `m${++idCounter}`;
+
+/** Earlier finished messages, sent with each request so follow-ups ("yes, do it") work. */
+function toHistory(messages: Message[]): ChatTurn[] {
+  return messages
+    .filter((m) => m.text.trim() && (m.role === "user" || m.status === "done"))
+    .map((m) => ({ role: m.role, text: m.text }));
+}
 
 export default function Home() {
-  const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState<
-    Array<{ id: string; role: "user" | "assistant" | "error"; body: string }>
-  >([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasChatStarted, setHasChatStarted] = useState(false);
-  const messageCounter = useRef(0);
-  const [now, setNow] = useState(() => new Date());
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [draft, setDraft] = useState("");
+  const [isBusy, setIsBusy] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(new Date());
-    }, 1000);
+  const [summary, setSummary] = useState<WorkforceSummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-    return () => clearInterval(interval);
+  const abortRef = useRef<AbortController | null>(null);
+  const composerRef = useRef<ComposerHandle>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+
+  const refreshSummary = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      setSummary(await getSummary());
+      setSummaryError(null);
+    } catch {
+      setSummaryError("Can't load the overview. Is the Adiutor server running on port 5000?");
+    } finally {
+      setIsRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (!hasChatStarted) {
-      return;
-    }
+    // Load the dashboard numbers once when the page opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshSummary();
+  }, [refreshSummary]);
 
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [hasChatStarted, messages, isLoading]);
+  // Keep the newest message in view, unless the user scrolled up to read.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && messages.length > 0 && stickToBottom.current) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
-  const clockTime = `${formatTwoDigits(now.getHours())}:${formatTwoDigits(
-    now.getMinutes()
-  )}`;
-  const clockSeconds = formatTwoDigits(now.getSeconds());
-  const clockDate = now.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  const updateMessage = (id: string, change: (m: Message) => Message) =>
+    setMessages((prev) => prev.map((m) => (m.id === id ? change(m) : m)));
 
-  const handleSend = async () => {
-    const originalPrompt = prompt;
-    const trimmed = originalPrompt.trim();
-    if (!trimmed) {
-      return;
-    }
+  const send = useCallback(
+    async (rawPrompt: string, previous: Message[]) => {
+      const prompt = rawPrompt.trim();
+      if (!prompt || abortRef.current) return;
 
-    setHasChatStarted(true);
-    setIsLoading(true);
-    messageCounter.current += 1;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `user-${messageCounter.current}`,
-        role: "user",
-        body: trimmed,
-      },
-    ]);
-    setPrompt("");
+      const userMessage: Message = { id: nextId(), role: "user", text: prompt, tools: [], status: "done" };
+      const reply: Message = { id: nextId(), role: "assistant", text: "", tools: [], status: "streaming" };
+      setMessages([...previous, userMessage, reply]);
+      setDraft("");
+      setIsBusy(true);
+      stickToBottom.current = true;
 
-    try {
-      const text = await sendChatPrompt(trimmed);
-      messageCounter.current += 1;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant-${messageCounter.current}`,
-          role: "assistant",
-          body: text,
-        },
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Request failed.";
-      messageCounter.current += 1;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `error-${messageCounter.current}`,
-          role: "error",
-          body: message,
-        },
-      ]);
-      setPrompt(originalPrompt);
-    } finally {
-      setIsLoading(false);
+      const controller = new AbortController();
+      abortRef.current = controller;
+      let changedData = false;
+
+      try {
+        await streamChat(
+          prompt,
+          toHistory(previous),
+          (event) => {
+            if (event.type === "text") {
+              updateMessage(reply.id, (m) => ({ ...m, text: m.text + event.delta }));
+            } else if (event.type === "tool") {
+              updateMessage(reply.id, (m) => ({ ...m, tools: [...m.tools, event.label] }));
+            } else if (event.type === "data_changed") {
+              changedData = true;
+            }
+          },
+          controller.signal
+        );
+        updateMessage(reply.id, (m) => ({ ...m, status: "done" }));
+      } catch (error) {
+        if (controller.signal.aborted) {
+          updateMessage(reply.id, (m) => ({ ...m, status: "stopped" }));
+        } else {
+          const text = error instanceof Error ? error.message : "Something went wrong.";
+          updateMessage(reply.id, (m) => ({ ...m, status: "error", error: text }));
+        }
+      } finally {
+        abortRef.current = null;
+        setIsBusy(false);
+        if (changedData) void refreshSummary();
+        composerRef.current?.focus();
+      }
+    },
+    [refreshSummary]
+  );
+
+  const sendDraft = () => void send(draft, messages);
+
+  const ask = (prompt: string) => {
+    setSidebarOpen(false);
+    void send(prompt, messages);
+  };
+
+  const retry = (assistantId: string) => {
+    const index = messages.findIndex((m) => m.id === assistantId);
+    const userMessage = messages[index - 1];
+    if (userMessage?.role === "user") void send(userMessage.text, messages.slice(0, index - 1));
+  };
+
+  const handleQuickAction = (action: QuickAction) => {
+    if (action.mode === "send") {
+      ask(action.prompt);
+    } else {
+      setDraft(action.prompt);
+      requestAnimationFrame(() => composerRef.current?.focus());
     }
   };
 
-  return (
-    <PageShell>
-      <OutputArea>
-        <TopBar
-          brand="Adiutor"
-          showClock={hasChatStarted}
-          time={`${clockTime}:${clockSeconds}`}
-        />
-        {!hasChatStarted ? (
-          <Hero title="Hello, User." subtitle="What are we exploring today?" />
-        ) : null}
-        {!hasChatStarted ? (
-          <section className="mt-10 flex items-center justify-center">
-            <div className="w-full max-w-xl rounded-[32px] border border-white/10 bg-white/5 px-10 py-12 text-center ">
-              <p className="text-xs uppercase tracking-[0.4em] text-zinc-500">
-                Local time
-              </p>
-              <div className="mt-4 flex items-end justify-center gap-2 font-mono text-5xl tracking-tight text-zinc-50 sm:text-6xl">
-                <span>{clockTime}</span>
-                <span className="pb-1 text-2xl text-zinc-400">
-                  {clockSeconds}
-                </span>
-              </div>
-              <p className="mt-4 text-sm text-zinc-400">{clockDate}</p>
-            </div>
-          </section>
-        ) : null}
-        {hasChatStarted ? (
-          <div className="relative mt-6">
-            <div className="max-h-[calc(100vh-260px)] pr-2">
-              <div className="flex flex-col gap-6 pb-24">
-                {messages.map((message) => {
-                  const isUser = message.role === "user";
-                  const isError = message.role === "error";
+  const newChat = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setDraft("");
+    setSidebarOpen(false);
+  };
 
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex items-start gap-3 ${
-                        isUser ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      {isUser ? null : (
-                        <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-zinc-200">
-                          🔆
-                        </div>
-                      )}
-                      <div
-                        className={
-                          isUser
-                            ? "max-w-[75%] rounded-2xl bg-zinc-800/90 px-4 py-3 text-base text-zinc-100"
-                            : "max-w-[75%] rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-zinc-200"
-                        }
-                      >
-                        <p
-                          className={
-                            isError
-                              ? "whitespace-pre-wrap text-red-300"
-                              : "whitespace-pre-wrap"
-                          }
-                        >
-                          {message.body}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-                {isLoading ? (
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-zinc-200">
-                      🔆
-                    </div>
-                    <div className="max-w-[75%] rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-300">
-                      Adiutor is thinking...
-                    </div>
-                  </div>
-                ) : null}
-                <div ref={chatEndRef} />
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </OutputArea>
-      <PromptInput
-        placeholder="Ask me anything..."
-        helperText="AI can make mistakes. Consider verifying important information."
-        value={prompt}
-        onChange={setPrompt}
-        onSend={handleSend}
-        isLoading={isLoading}
+  const hasMessages = messages.length > 0;
+
+  return (
+    <div className="flex h-dvh w-full overflow-hidden">
+      <Sidebar
+        summary={summary}
+        summaryError={summaryError}
+        isRefreshing={isRefreshing}
+        onRefresh={() => void refreshSummary()}
+        onNewChat={newChat}
+        onAsk={ask}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
-    </PageShell>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur lg:px-6">
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+            >
+              <MenuIcon />
+            </button>
+            <h2 className="text-sm font-semibold text-slate-800">
+              {hasMessages ? "Conversation" : "Home"}
+            </h2>
+          </div>
+          {hasMessages ? (
+            <button
+              onClick={newChat}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              <PlusIcon /> New
+            </button>
+          ) : null}
+        </header>
+
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto"
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          }}
+        >
+          {hasMessages ? (
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6">
+              {messages.map((message) => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  onRetry={message.status === "error" ? () => retry(message.id) : undefined}
+                />
+              ))}
+            </div>
+          ) : (
+            <Welcome onAction={handleQuickAction} />
+          )}
+        </div>
+
+        <Composer
+          ref={composerRef}
+          value={draft}
+          onChange={setDraft}
+          onSend={sendDraft}
+          onStop={() => abortRef.current?.abort()}
+          isBusy={isBusy}
+        />
+      </div>
+    </div>
   );
 }

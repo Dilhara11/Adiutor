@@ -9,7 +9,8 @@ By default, the frontend calls the backend at `http://localhost:5000`.
 
 ## ✨ Highlights
 
-- AI assistant chat powered by Google Gemini
+- AI assistant chat powered by Google Gemini, with streaming answers and conversation memory
+- HR dashboard: workforce overview, headcount by department, recent hires, quick actions
 - Employee management endpoints for common HR flows
 - TypeScript-based frontend with modern React + Next.js
 - Python FastAPI backend with SQLite persistence
@@ -46,7 +47,8 @@ client (Next.js)  --->  server (FastAPI)  --->  Gemini API
 cd server
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirments.txt
+pip install -r requirements.txt
+python db.py --demo   # optional: adds 10 sample employees
 python main.py
 ```
 
@@ -54,7 +56,10 @@ Create `server/.env`:
 
 ```env
 GEMINI_API_KEY=your_key_here
+# optional: GEMINI_MODEL, SEED_DEMO_DATA, HR_DB_PATH, CORS_ORIGINS, PORT
 ```
+
+The database (`server/human_resources.db`) is created automatically on start-up with default departments and jobs.
 
 Backend URL: `http://localhost:5000`
 
@@ -76,12 +81,16 @@ Frontend URL: `http://localhost:3000`
 
 ## 🔌 API at a glance
 
-- `GET /employees/department/{department_id}`
-- `GET /employees/job/{job_id}`
-- `POST /employees`
-- `PUT /employees/{employee_id}`
-- `DELETE /employees/{employee_id}`
-- `POST /chat`
+- `POST /chat/stream` — streamed AI answer (newline-delimited JSON events)
+- `POST /chat` — full AI answer in one response (`{prompt, history}` → `{text, tools}`)
+- `GET /summary`, `GET /departments`, `GET /jobs`, `GET /health`
+- `GET /employees?q=`, `GET /employees/{employee_id}`
+- `GET /employees/department/{department_id}`, `GET /employees/job/{job_id}`
+- `POST /employees`, `PUT /employees/{employee_id}`, `DELETE /employees/{employee_id}`
+
+## 📝 What's new
+
+See [docs/CHANGES.md](docs/CHANGES.md) for a plain-English guide to the latest performance, safety and UI improvements.
 
 ## 🧪 Frontend Scripts
 
@@ -94,4 +103,4 @@ From `client/`:
 ## 📝 Notes
 
 - Backend CORS is configured for `http://localhost:3000` by default.
-- The backend dependency file is intentionally named `requirments.txt`.
+- The AI asks for confirmation before adding, editing or removing employees. There is no login yet, so don't expose the app publicly.

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f7fb;
+  --foreground: #1f2333;
 }
 
 @theme inline {
@@ -12,15 +12,72 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Styling for AI answers rendered from Markdown */
+.answer {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.answer > * + * {
+  margin-top: 0.75rem;
+}
+.answer h1,
+.answer h2,
+.answer h3 {
+  font-weight: 600;
+  color: #111827;
+}
+.answer h1 { font-size: 1.15rem; }
+.answer h2 { font-size: 1.05rem; }
+.answer h3 { font-size: 1rem; }
+.answer ul { list-style: disc; padding-left: 1.25rem; }
+.answer ol { list-style: decimal; padding-left: 1.25rem; }
+.answer li + li { margin-top: 0.25rem; }
+.answer strong { font-weight: 600; color: #111827; }
+.answer a { color: #4f46e5; text-decoration: underline; }
+.answer code {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.85em;
+  background: #eef0f6;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+}
+.answer .table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+.answer table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.answer th {
+  background: #f3f4f8;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+.answer th,
+.answer td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #eceef3;
+}
+.answer tr:last-child td { border-bottom: none; }
+.answer tbody tr:nth-child(even) { background: #fafbfd; }
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.cursor::after {
+  content: "▍";
+  margin-left: 2px;
+  color: #6366f1;
+  animation: blink 1s step-end infinite;
 }
