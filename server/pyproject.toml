@@ -1,0 +1,16 @@
+[project]
+name = "adiutor-server"
+version = "0.1.0"
+description = "Adiutor HR assistant backend (FastAPI + Gemini + SQLite)"
+readme = "../README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.136.1",
+    "google-genai>=1.73.1,<2",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.46.0",
+]
+
+[tool.uv]
+# This is an app, not a library, so uv doesn't need to build/install it.
+package = false

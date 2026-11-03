@@ -25,7 +25,7 @@ client (Next.js)  --->  server (FastAPI)  --->  Gemini API
 ## 🛠️ Tech Stack
 
 - **Frontend:** Next.js, React, TypeScript, Tailwind CSS
-- **Backend:** FastAPI, Uvicorn, Python, SQLite
+- **Backend:** FastAPI, Uvicorn, Python, SQLite, managed with uv
 - **AI:** Google Gemini (`google-genai`)
 
 ## 📁 Project Structure
@@ -36,7 +36,7 @@ client (Next.js)  --->  server (FastAPI)  --->  Gemini API
 ## ✅ Prerequisites
 
 - Node.js 18+
-- Python 3.11+
+- Python 3.11+ and [uv](https://docs.astral.sh/uv/) (uv can install Python for you)
 - Gemini API key
 
 ## 🚀 Quick Start
@@ -45,11 +45,9 @@ client (Next.js)  --->  server (FastAPI)  --->  Gemini API
 
 ```bash
 cd server
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python db.py --demo   # optional: adds 10 sample employees
-python main.py
+uv sync                  # creates .venv and installs exact versions from uv.lock
+uv run db.py --demo      # optional: adds 10 sample employees
+uv run main.py
 ```
 
 Create `server/.env`:

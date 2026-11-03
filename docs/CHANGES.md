@@ -23,7 +23,7 @@ You don't need to be a programmer to follow the "Why it matters" parts.
 | 10 | Database | Connections were never closed | Every connection is closed after use |
 | 11 | AI quality | No instructions; only 5 basic tools | Clear instructions and 11 tools (search by name, dates, summary…) |
 | 12 | UI | A generic dark chat page with a ticking clock | An HR dashboard: overview sidebar, quick actions, tables, progress chips |
-| 13 | Misc | `requirments.txt` (typo), hard-coded settings | `requirements.txt`, settings through `.env` |
+| 13 | Misc | `requirments.txt` (typo) + pip, hard-coded settings | A **uv** project (`pyproject.toml` + `uv.lock`), settings through `.env` |
 
 ---
 
@@ -208,7 +208,7 @@ says it stopped and asks you to try a simpler question.
 ## 9. Database improvements
 
 ### a) Setup is automatic, with starter data
-**Before.** You had to remember to run `python db.py`. Even then, the
+**Before.** You had to remember to run `python db.py` by hand. Even then, the
 `departments` and `jobs` tables were empty, so **every** "add employee" failed
 with a confusing `FOREIGN KEY constraint failed` error.
 
@@ -220,7 +220,7 @@ those tables are empty. Existing data is never touched.
 To try the app with 10 sample employees:
 
 ```bash
-python db.py --demo
+uv run db.py --demo
 ```
 
 Or set `SEED_DEMO_DATA=true` in `server/.env`.
@@ -373,15 +373,30 @@ component, and chat messages are memoized so they only redraw when they change.
 
 ## 13. Small clean-ups
 
-- `server/requirments.txt` was renamed to **`server/requirements.txt`**, the
-  standard name.
+- **The backend now uses [uv](https://docs.astral.sh/uv/) instead of pip.**
+  Before, setup took four commands (make a virtual environment, activate it,
+  `pip install -r requirments.txt`, which had a typo in the name, then run).
+  Now it takes two:
+
+  ```bash
+  cd server
+  uv sync          # makes .venv and installs everything
+  uv run main.py   # starts the server, no "activate" needed
+  ```
+
+  The package list is in `server/pyproject.toml`. The exact versions are saved
+  in `server/uv.lock`, so everyone gets the same versions that were tested.
+  It's like a recipe that says *which brand* of each ingredient to buy, not
+  just "flour". To add a package later, run `uv add <name>`.
+  `google-genai` is kept below version 2, because 2.x hasn't been tested
+  with Adiutor yet.
 - Allowed web origins (CORS) can be set with `CORS_ORIGINS`.
 - The server port can be set with `PORT`.
 - Updates only accept known fields (`UPDATABLE_FIELDS`). This blocks requests
   that try to change unexpected columns.
 - New read endpoints: `GET /health`, `/summary`, `/departments`, `/jobs`,
   `/employees?q=`, `/employees/{id}`.
-- The terminal chat (`python gemini_chat.py`) uses the same code as the
+- The terminal chat (`uv run gemini_chat.py`) uses the same code as the
   website, so it also streams, remembers the conversation and shows tool
   steps.
 
@@ -407,7 +422,7 @@ PORT=5000                                    # optional
 | `server/employee_logic.py` | Connections closed, joins, search, summaries, friendlier errors, optional IDs |
 | `server/db.py` | `init_db()`, indexes, WAL, default departments and jobs, `--demo` sample data |
 | `server/gemini_chat.py` | Streaming terminal chat with memory |
-| `server/requirements.txt` | Renamed from `requirments.txt` |
+| `server/pyproject.toml`, `server/uv.lock` | New uv project files; replace `requirments.txt` |
 | `client/app/page.tsx` | New dashboard layout, streaming, history, stop and retry |
 | `client/app/components/*` | New `Sidebar`, `Welcome`, `ChatMessage`, `Composer`, `Markdown`, icons |
 | `client/app/lib/api.ts` | Streaming client and summary API (replaces `chatApi.ts`) |
